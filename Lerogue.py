@@ -1,9 +1,11 @@
 import copy
 import math
 import random
+from sys import*
 from tkinter import *
 from PIL import Image, ImageTk
 from playsound import playsound
+import winsound
 # exceptions
 
 
@@ -265,7 +267,7 @@ class Map(object):
         if hero is None:
             hero = Hero()
         self.hero = hero
-        self.generateRooms(15)
+        self.generateRooms(20)
         self.reachAllRooms()
         for r in self._rooms:
             r.decorate(self)
@@ -648,24 +650,39 @@ class Game(object):
             if event in Game._actions:
                 Game._actions[event](self.hero)
                 self.floor.moveAllMonsters()
+                canvas.delete('all')
                 self.dessineTout()
                 window.update()
                 self.continuer(event)
+        else:
+            window.unbind('<Any-KeyPress>')
+            canvas.delete('all')
+            gameOver.pack()
+            retry.pack()
 
     def play(self):
         """Main game loop"""
         cpt=0
         self.buildFloor()   
-
         self.floor.put(self.floor._rooms[0].center(), self.hero)
         self.dessineTout()
-        playsound("I:/jeu Poo/musique jeu/ClosingArgumentDGS.mp3", False)
+        winsound.PlaySound("I:/jeu Poo/musique jeu/ClosingArgumentDGS.wav", winsound.SND_ASYNC)
         window.bind('<Any-KeyPress>',self.press)
         self.floor.moveAllMonsters()
     
     def continuer(self,event):
         self.press
+    
+    def retry(self):
+        gameOver.destroy()
+        retry.destroy()
+        winsound.PlaySound(None, winsound.SND_PURGE)
+        window.bind('<Any-KeyPress>', theGame().press)
+        theGame().play()
 
+class Vendeur(Creature):
+    def go(self):
+        pass
 def theGame(game=Game()):
     """Game singleton"""
     return game
@@ -675,8 +692,10 @@ window = Tk()
 window.state("zoomed")
 
 w, h = window.winfo_screenwidth(), window.winfo_screenheight()
-debut = Label(text='Bienvenue dans le Rogue', font=('Arial 20'))
 canvas = Canvas(window, width=w, height=h, bg='black')
+gameOver= Label(canvas, text='Game over', font=('Arial 20'))
+retry=Button(canvas, text = 'Retry', font =('Arial 20'), command = theGame().retry)
+
 
 textures = {
     'map': {
