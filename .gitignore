@@ -112,3 +112,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+musique jeu/chariot.wav
+musique jeu/ClosingArgumentDGS.wav

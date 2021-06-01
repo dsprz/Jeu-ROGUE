@@ -1,11 +1,10 @@
 import copy
 import math
 import random
-from sys import*
 from tkinter import *
 from PIL import Image, ImageTk
 from playsound import playsound
-import winsound
+import threading
 # exceptions
 
 
@@ -254,7 +253,6 @@ class Map(object):
         'q': Coord(-1, 0)
     }  # four direction user keys
     empty = ' '  # A non walkable cell
-    stairs = 'stairs'
 
     def __init__(self, size=20, hero=None):
         self._mat = []
@@ -267,7 +265,7 @@ class Map(object):
         if hero is None:
             hero = Hero()
         self.hero = hero
-        self.generateRooms(20)
+        self.generateRooms(10)
         self.reachAllRooms()
         for r in self._rooms:
             r.decorate(self)
@@ -306,6 +304,7 @@ class Map(object):
                     if el.abbrv == "B":
                         canvas.create_image(j*50, i*50, anchor=NW, image = textures['mobs']['Blob']),
 
+
         canvas.pack()
 
     def dessineHero(self):
@@ -330,9 +329,6 @@ class Map(object):
 
                     if el.abbrv == "hp":
                         canvas.create_image(j*50, i*50, anchor = NW, image = textures['items']['Health Pot'])
-                    
-                    if el.abbrv == 'Arrow':
-                        canvas.create_image(j*50, i*50, anchor = NW, image = textures['items']['Arrow'])
 
         canvas.pack()
     
@@ -483,16 +479,13 @@ class Map(object):
         orig = self.pos(e)
         dest = orig + way
         if dest in self:
-            if self.get(dest) == Map.stairs:
-                theGame().newFloor()
-            else:
-                if self.get(dest) == Map.ground:
-                    self._mat[orig.y][orig.x] = Map.ground
-                    self._mat[dest.y][dest.x] = e
-                    self._elem[e] = dest
-                elif self.get(dest) != Map.empty and self.get(dest).meet(
-                        e) and self.get(dest) != self.hero:
-                    self.rm(dest)
+            if self.get(dest) == Map.ground:
+                self._mat[orig.y][orig.x] = Map.ground
+                self._mat[dest.y][dest.x] = e
+                self._elem[e] = dest
+            elif self.get(dest) != Map.empty and self.get(dest).meet(
+                    e) and self.get(dest) != self.hero:
+                self.rm(dest)
 
     def moveAllMonsters(
         self
@@ -532,8 +525,7 @@ class Game(object):
     """ Class representing game state """
     """ available equipments """
     equipments = {0: [Equipment("Health pot", "hp", usage=lambda self, hero: heal(hero)), \
-                      Equipment("gold", "o"),
-                      Equipment("Arrow", "Arrow")], \
+                      Equipment("gold", "o")], \
                   1: [Equipment("potion", "!", usage=lambda self, hero: teleport(hero, True))], \
                   2: [Equipment("bow", usage=lambda self, hero: throw(1, True)),
                       Equipment('TNT','TNT', usage =lambda self, hero : throw(1,True))  ], \
@@ -548,15 +540,10 @@ class Game(object):
             Creature("Doge",5)
         ],
         1: [Creature("Ork", 6, strength=2),
-            Creature("Blob", 5)],
+            Creature("Blob", 10)],
         5: [Creature("Dragon", 20, strength=3)],
     }
-    element = {
-        0:
-        [
-            Element('Stairs', 'stairs')
-        ]
-    }
+
     """ available actions """
     _actions = {'z': lambda h: theGame().floor.move(h, Coord(0, -1)), \
                 'q': lambda h: theGame().floor.move(h, Coord(-1, 0)), \
@@ -577,20 +564,12 @@ class Game(object):
             hero = Hero()
         self.hero = hero
         self.floor = None
-        self.hero.hp == 30
 
     def buildFloor(self):  ### initialise le floor à une nouvelle map
         self.floor = Map(hero=self.hero)
 
     def newFloor(self):  ### Nouvel étage
-        print ('lol')
-        canvas.delete('all')
-        self.hero.hp+=10
         self.buildFloor()
-
-        self.floor.put(self.floor._rooms[0].center(), self.hero)
-        self.dessineTout()
-        self.press
 
     def addMessage(self, msg):  #### ajoute un message à la liste de messages
 
@@ -645,44 +624,33 @@ class Game(object):
         return False
 
     def press(self, event):
+        gameOver = Label(window, text='Game Over', font=("Arial 20"))
         event = event.char
         if self.stillAlive():
             if event in Game._actions:
                 Game._actions[event](self.hero)
                 self.floor.moveAllMonsters()
-                canvas.delete('all')
                 self.dessineTout()
                 window.update()
                 self.continuer(event)
         else:
-            window.unbind('<Any-KeyPress>')
-            canvas.delete('all')
             gameOver.pack()
-            retry.pack()
+
 
     def play(self):
         """Main game loop"""
-        cpt=0
         self.buildFloor()   
+
         self.floor.put(self.floor._rooms[0].center(), self.hero)
         self.dessineTout()
-        winsound.PlaySound("I:/jeu Poo/musique jeu/ClosingArgumentDGS.wav", winsound.SND_ASYNC)
+        playsound("I:/jeu Poo/musique jeu/ClosingArgumentDGS.mp3", False)
         window.bind('<Any-KeyPress>',self.press)
         self.floor.moveAllMonsters()
+        print (self.hero.hp)
     
     def continuer(self,event):
         self.press
-    
-    def retry(self):
-        gameOver.destroy()
-        retry.destroy()
-        winsound.PlaySound(None, winsound.SND_PURGE)
-        window.bind('<Any-KeyPress>', theGame().press)
-        theGame().play()
 
-class Vendeur(Creature):
-    def go(self):
-        pass
 def theGame(game=Game()):
     """Game singleton"""
     return game
@@ -692,10 +660,8 @@ window = Tk()
 window.state("zoomed")
 
 w, h = window.winfo_screenwidth(), window.winfo_screenheight()
+debut = Label(text='Bienvenue dans le Rogue', font=('Arial 20'))
 canvas = Canvas(window, width=w, height=h, bg='black')
-gameOver= Label(canvas, text='Game over', font=('Arial 20'))
-retry=Button(canvas, text = 'Retry', font =('Arial 20'), command = theGame().retry)
-
 
 textures = {
     'map': {
@@ -713,8 +679,7 @@ textures = {
         'TNT': ImageTk.PhotoImage(Image.open("I:/jeu Poo/images jeu/TNT.png")),
         'Health Pot': ImageTk.PhotoImage(Image.open("I:/jeu Poo/images jeu/healthpot.png")),
         'Rainbow Sword': ImageTk.PhotoImage(Image.open("I:/jeu Poo/images jeu/sword (2).png")),  ### à redim
-        'Moonstaff': ImageTk.PhotoImage(Image.open("I:/jeu Poo/images jeu/moonstaff(1).png")),
-        'Arrow' : ImageTk.PhotoImage(Image.open("I:/jeu Poo/images jeu/arrow.png"))
+        'Moonstaff': ImageTk.PhotoImage(Image.open("I:/jeu Poo/images jeu/moonstaff(1).png"))
     },  #### à redim
     'hero': {
         "Hero": ImageTk.PhotoImage(Image.open("I:/jeu Poo/images jeu/monokuma.png"))
@@ -726,3 +691,5 @@ getch = _find_getch()
 window.bind('<KeyPress>',theGame().press)
 theGame().play()
 window.mainloop()
+
+
