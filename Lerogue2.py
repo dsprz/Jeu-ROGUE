@@ -6,32 +6,6 @@ from PIL import Image, ImageTk
 import winsound
 # exceptions
 
-
-def _find_getch():
-    """Single char input, only works only on mac/linux/windows OS terminals"""
-    try:
-        import termios
-    except ImportError:
-        # Non-POSIX. Return msvcrt's (Windows') getch.
-        import msvcrt
-        return lambda: msvcrt.getch().decode('utf-8')
-    # POSIX system. Create and return a getch that manipulates the tty.
-    import sys
-    import tty
-
-    def _getch():
-        fd = sys.stdin.fileno()
-        old_settings = termios.tcgetattr(fd)
-        try:
-            tty.setraw(fd)
-            ch = sys.stdin.read(1)
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        return ch
-
-    return _getch
-
-
 def sign(x):
     if x > 0:
         return 1
@@ -196,7 +170,7 @@ class Hero(Creature):
                  lvl=1):
         Creature.__init__(self, name, hp, hpMax, abbrv, strength)
         self.hunger = 100
-        self.starve = 5
+        self.starve = 2
         self.faim = 0
         self.kill = 0
         self.xp = xp
@@ -251,6 +225,7 @@ class Hero(Creature):
     def takeKids(self, kids):
         self.checkKids(kids)
         theGame().hero._bag.append(kids)
+        theGame().addMessage('You picked up ' + str(kids))
     
     def takeProjectile(self, el):
         self.checkProjectile(el)
@@ -297,7 +272,6 @@ class Hero(Creature):
         canvasInventaire.create_image(360,590, anchor = NW, image = textures['interface']['Monotaro'])
         canvasInventaire.create_image(240,600, anchor = NW, image = textures['interface']['Monodam'])
         canvasInventaire.create_image(120,600, anchor = NW, image = textures['interface']['Monokid'])
-
 
 
     def ecritInventaire(self):
@@ -820,7 +794,6 @@ class Map(object):
                         if isinstance(self.get(dest), Creature):
                             self.change = True
                             theGame().hero.kill+=1
-                            print (theGame().hero.kill)
                             theGame().hero.addXP(self.get(dest).xp)
                         self._mat[orig.y][orig.x] = Map.ground
                         self.rm(dest)
@@ -841,7 +814,6 @@ class Map(object):
                 d = c.direction(h)
                 if e.abbrv == 'Sans' and self.change is True: ### gagne de l'attaque à chaque mob tué
                     e.strength+=theGame().hero.kill
-                    print (theGame().hero.kill)
                     print (e.strength)
                     if theGame().hero.kill%4==0:  ### gagne de la vie pour chaque 4 monstres tués
                         e.hp+=theGame().hero.kill/4
@@ -1091,6 +1063,7 @@ class Game(object):
             if k <= x:
                 l = collect[k]
         a = copy.copy(random.choice(l))
+        
         if isinstance(a, Creature):
             a.strength += self.bonus 
             a.hp+=self.bonus
@@ -1099,6 +1072,7 @@ class Game(object):
                 a.strength+=theGame().hero.kill
                 a.hp+=theGame().hero.kill
                 a.xp+=self.bonus
+        
         return a
     
     def randEquipment(self):  #### génère un équipement aléatore
@@ -1110,13 +1084,13 @@ class Game(object):
         return self.randElement(Game.monsters)
     
     def randMoney(self):
+
         return self.randElement(Game.money)
     
     def putRandomKids(self): ### put des kids dans la map
         if self.l == []:
             self.l = [self.Monosuke,self.Monophanie,self.Monotaro,self.Monodam,self.Monokid]
         rng = random.randint(0,10)
-        print (self.l)
         if (rng == 1 or rng == 6) and self.Monosuke in self.l and self.Monosuke not in theGame().hero._bag:
             self.floor.put(self.floor._rooms[random.randint(0,len(self.floor._rooms)-1)].randEmptyCoord(self.floor),self.Monosuke)
 
@@ -1173,6 +1147,7 @@ class Game(object):
                 creature = False
         except IndexError:
             b.y = 0
+            creature = False
         
         if not creature:
             theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[0])
@@ -1182,6 +1157,8 @@ class Game(object):
         theGame().hero._inventory.remove(theGame().hero._inventory[0])
         canvasInventaire.delete('all')
         canvas.delete('all')
+        self.floor.moveAllMonsters()
+
         self.dessineTout()
 
     def throwDown(self,event): ### doit vérifier qu'il y ait pas d'item sur la case d'arrivée
@@ -1196,7 +1173,8 @@ class Game(object):
                 creature = False
         except IndexError:
             b.y = theGame().floor.size-1
-  
+            creature = False
+
         if not creature:
             theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[0])
         else:
@@ -1205,6 +1183,8 @@ class Game(object):
         
         canvasInventaire.delete('all')
         canvas.delete('all')
+        self.floor.moveAllMonsters()
+
         self.dessineTout()
     
     def throwRight(self,event): ### doit vérifier qu'il y ait pas d'item sur la case d'arrivée
@@ -1219,6 +1199,7 @@ class Game(object):
                 creature = False               
         except IndexError:
             b.x = theGame().floor.size-1
+            creature = False
   
         if not creature:
             theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[0])
@@ -1227,6 +1208,7 @@ class Game(object):
         theGame().hero._inventory.remove(theGame().hero._inventory[0])
         canvasInventaire.delete('all')
         canvas.delete('all')
+        self.floor.moveAllMonsters()
         self.dessineTout()
     
     def throwLeft(self,event): ### doit vérifier qu'il y ait pas d'item sur la case d'arrivée
@@ -1241,6 +1223,7 @@ class Game(object):
                 creature = False                
         except IndexError:
             b.x = theGame().floor.size-1
+            creature = False
   
         if not creature:
             theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[0])
@@ -1248,6 +1231,8 @@ class Game(object):
             theGame().floor.get(Coord(b.x,b.y)).use(theGame().hero._inventory[0])    
         canvasInventaire.delete('all')
         canvas.delete('all')
+        self.floor.moveAllMonsters()
+
         self.dessineTout()
 
     def dessineVie(self):
@@ -1347,8 +1332,7 @@ class Game(object):
 
         cpt=0
         self.buildFloor()
-        print (self.floor)
-        print (self.floor._mat)
+
         if self.floor.get(self.floor._rooms[0].center()) !=Map.ground:
             self.floor._mat[self.floor._rooms[0].center().y][self.floor._rooms[0].center().x]=Map.ground
         self.floor.put(self.floor._rooms[0].center(), self.hero)
@@ -1468,7 +1452,6 @@ textures = {
     }
 }
 
-getch = _find_getch()
 window.bind('<KeyPress>',theGame().press)
 theGame().play()
 window.mainloop()
