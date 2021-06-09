@@ -117,13 +117,8 @@ class Metal(Equipment):
     def use(self, creature):
         """Uses the piece of equipment. Has effect on the hero according usage.
             Return True if the object is consumed."""
-        if self.usage is None:
-            theGame().addMessage("The " + self.name + " is not usable")
-            return False
-        else:
-            theGame().addMessage("The " + creature.name + " uses the " +
-                                 self.name)
-            return self.usage(self, creature)
+        theGame().addMessage("The " + creature.name + " uses the " + self.name)
+        return self.usage(self, creature)
         
 
 class Projectile(Element):
@@ -172,10 +167,14 @@ class Sword(Equipment):
         return self.usage(self,creature)
     
     def dessineEquippedSword(self):
-        invSword = (str (i) for i in theGame().hero.sword)
-        if 'Rainbow Sword' in invSword:
-            canvasInventaire.create_image(500,100, anchor = NW, image = textures['items']['Rainbow Sword'])
-
+        canvasInventaire.create_text(525,180, text = "Strength : " + str(theGame().hero.strength), font = "Arial 12", fill = 'red')
+        for i in theGame().hero.sword:
+            if i.abbrv == 'Rainbow Sword':
+                canvasInventaire.create_image(500,100, anchor = NW, image = textures['items']['Rainbow Sword'])
+            if i.abbrv == 'Katana':
+                canvasInventaire.create_image(500,100, anchor = NW, image = textures['items']['Katana'])
+            if i.abbrv == 'Gun':
+                canvasInventaire.create_image(500,100, anchor = NW, image = textures['items']['Gun'])
 
 class Armor(Equipment):
     """Armors"""
@@ -183,7 +182,16 @@ class Armor(Equipment):
         Equipment.__init__(self, name, abbrv, usage)
         self.usage = usage
         self.armor = armor
-        pass
+    
+    def use(self, creature):
+        theGame().addMessage('You equipped ' + self.name + '. Armor +' +  str(self.armor))
+        return self.usage(self,creature)
+    
+    def dessineEquippedArmor(self):
+        canvasInventaire.create_text(625,180, text = "Armor : " + str(theGame().hero.protection), font = "Arial 12", fill = 'red')
+        for i in theGame().hero.armor:
+            if i.abbrv == 'Blue Armor':
+                canvasInventaire.create_image(580,95, anchor = NW, image = textures['items']['Blue Armor'])
 
 class Creature(Element):
     """A creature that occupies the dungeon.
@@ -205,7 +213,13 @@ class Creature(Element):
     def meet(self, other):
         """The creature is encountered by an other creature.
             The other one hits the creature. Return True if the creature is dead."""
-        self.hp -= other.strength
+        if isinstance(self, Hero):
+            if theGame().hero.protection > other.strength:
+                self.hp-=1
+            else:
+                self.hp -= other.strength - theGame().hero.protection
+        else:
+            self.hp -= other.strength
         if str(other.abbrv) == 'Metallica':
             for j in theGame().hero._inventory:
                 if isinstance(j, Metal):
@@ -254,6 +268,7 @@ class Hero(Creature):
                  hpMax=70,
                  abbrv="@",
                  strength=5,
+                 protection = 0,
                  xp=0,
                  lvl=1):
         Creature.__init__(self, name, hp, hpMax, abbrv, strength, on)
@@ -261,6 +276,7 @@ class Hero(Creature):
         self.starve = 2
         self.faim = 0
         self.kill = 0
+        self.protection = protection
         self.xp = xp
         self.lvl = lvl
         self._inventory = []
@@ -269,9 +285,11 @@ class Hero(Creature):
         self._stock = []
         self.sword = [] ### liste de longueur 1 max
         self.armor = [] ### liste de longueur 1 max
+        self.poison = 0
         self.poisoned = False
         self.invisible = None
         self.equipped = False
+        self.armored = False
     def description(self):
         """Description of the hero"""
         return Creature.description(self) + str(self._inventory)
@@ -330,10 +348,11 @@ class Hero(Creature):
             raise ValueError('Equipment ' + elem.name + 'not in inventory')
         if elem.use(self):
             if isinstance(elem, Metal) or isinstance(elem, Sword) or isinstance(elem, Armor):
-                if isinstance(elem, Sword):
-                    theGame().addMessage('You gained ' + str(elem.attack))
+                if isinstance(elem, Sword) or isinstance(elem, Metal):
+                    theGame().addMessage('You gained ' + str(elem.attack) + 'strength')
                     self.sword.append(elem)
                 if isinstance(elem, Armor):
+                    theGame().addMessage('You gained ' + str(elem.armor) + 'armor')
                     self.armor.append(elem)
             self._inventory.remove(elem)
             if self.on != None :
@@ -352,7 +371,7 @@ class Hero(Creature):
                     self.lvl+=1
                     self.xp = self.xp-(i**2)
                     self.hp = 60 + self.lvl*2
-                    self.strength+=2 + self.lvl
+                    self.strength+=2 + math.floor(self.lvl/7)
                     self.hpMax+=60 + self.lvl*2
                 else :
                     break
@@ -412,7 +431,15 @@ class Hero(Creature):
                 if eq.abbrv == 'Pizza':
                     canvasInventaire.create_image(150,l, anchor = NW, image = textures['items']['Pizza'])
                     l+=100
-
+                
+                if eq.abbrv == 'Katana':
+                    canvasInventaire.create_image(150,l, anchor = NW, image = textures['items']['Katana'])
+                    l+=100
+                
+                if eq.abbrv == 'Blue Armor':
+                    canvasInventaire.create_image(140,l-20, anchor = NW, image = textures['items']['Blue Armor'])
+                    l+=100
+    
     def unequipped(self):
         if len(self._inventory) < 5:
             self._inventory.append(self.sword[0])
@@ -420,7 +447,14 @@ class Hero(Creature):
         theGame().addMessage('You lost ' + str(self.sword[0].attack))
         self.sword.remove(self.sword[0])
         self.equipped = False 
-
+    
+    def unequippedArmor(self):
+        if len(self._inventory) < 5:
+            self._inventory.append(self.armor[0])
+        self.protection-=self.armor[0].armor
+        theGame().addMessage('You lost ' + str(self.armor[0].armor))
+        self.armor.remove(self.armor[0])
+        self.armored = False 
 
 class Room(object):
     """A rectangular room in the map"""
@@ -615,9 +649,21 @@ class Map(object):
             for j in range(len(self._mat[i])):
                 el = self._mat[i][j]
                 if isinstance(el, Hero):
-                    if self.hero.invisible != None :
-                        canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroInv'])
-                    elif 'Gun' in (str(i) for i in theGame().hero._inventory):
+                    if theGame().hero.invisible != None :
+                        if 'Gun' in (str(i) for i in theGame().hero.sword):
+                            canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroCBInvisible'])
+                        elif 'Rainbow Sword' in (str(i) for i in theGame().hero.sword):
+                            canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroSwordInvisible'])
+                        elif 'Katana' in (str(i) for i in theGame().hero.sword):
+                            canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroKatanaInvisible'])
+                        else:
+                            canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroInv'])
+
+                    elif 'Rainbow Sword' in (str(i) for i in theGame().hero.sword):
+                        canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroSword'])
+                    elif 'Katana' in (str(i) for i in theGame().hero.sword):
+                        canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroKatana'])
+                    elif 'Gun' in (str(i) for i in theGame().hero.sword):
                         canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroCB'])
                     else:
                         canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['Hero'])
@@ -661,7 +707,14 @@ class Map(object):
                             canvas.create_image(j*50, i*50, anchor = NW, image = textures['items']['Apple'])       
 
                         if el.abbrv == 'Pizza':
-                            canvas.create_image(j*50, i*50, anchor = NW, image = textures['items']['Pizza'])                      
+                            canvas.create_image(j*50, i*50, anchor = NW, image = textures['items']['Pizza'])
+
+                        if el.abbrv == 'Katana':
+                            canvas.create_image(j*50, i*50, anchor = NW, image = textures['items']['Katana'])
+                    
+                        if el.abbrv == 'Blue Armor':
+                            canvas.create_image(j*50, i*50, anchor = NW, image = textures['items']['Blue Armor'])
+                       
 
 
 
@@ -908,7 +961,6 @@ class Map(object):
                 d = c.direction(h)
                 if e.abbrv == 'Sans': ### gagne de l'attaque à chaque mob tué
                     e.strength=theGame().hero.kill
-                    print ('force : ', e.strength)   
                     e.xp+=theGame().bonus
                     if theGame().hero.kill%2==0:  ### gagne de la vie pour chaque 2 monstres tués
                         e.hp=theGame().hero.kill
@@ -957,9 +1009,31 @@ def teleport(creature, unique):
 def equip(creature,attack):
     """ equip the hero with a weapon"""
     theGame().hero.equipped = True 
-    theGame().hero.strength+=attack
+    if len(theGame().hero.sword) == 0:
+        theGame().hero.strength+=attack
+    
+    elif len(theGame().hero.sword) != 0 and len(theGame().hero._inventory) < 5:
+        theGame().hero._inventory.append(theGame().hero.sword[0])
+        theGame().hero.sword.remove(theGame().hero.sword[0])
+    
+    elif len(theGame().hero.sword) != 0 and len(theGame().hero._inventory) >=5:
+        theGame().hero.sword.remove(theGame().hero.sword[0])
+
     return True
 
+def equipArmor(creature, armor):
+    theGame().hero.armored = True
+    if len(theGame().hero.armor) == 0:
+        theGame().hero.protection+=armor
+    
+    elif len(theGame().hero.armor) != 0 and len(theGame().hero._inventory) < 5:
+        theGame().hero._inventory.append(theGame().hero.armor[0])
+        theGame().hero.armor.remove(theGame().hero.armor[0])
+
+    elif len(theGame().hero.sword) != 0 and len(theGame().hero._inventory) >=5:
+        theGame().hero.armor.remove(theGame().hero.armor[0]) 
+
+    return True 
 def throw(creature):
     if creature == theGame().hero:
         if creature.hp + 30 >= creature.hpMax:
@@ -984,15 +1058,17 @@ class Game(object):
                       MetallicProjectile("Bee", "Bee"),
                       Metal("Bow",'bow', usage=lambda self,creature: equip(creature,20)),
                       Food("Apple", "Apple", usage=lambda self, creature: nourrir(creature, 30)),
-], \
+                      Armor('Blue Armor', 'Blue Armor', usage = lambda self, creature : equipArmor(creature,10)) ], \
                   1: [
                       Metal('Gun', 'Gun', attack = 30,usage =lambda self, creature : equip(creature, 30)),
                       Food('Pizza', 'Pizza', usage=lambda self, creature: nourrir(creature, 50)),
-                      Sword("Catch the Rainbow", abbrv = "Rainbow Sword", attack = 15, usage =lambda self, creature : equip(creature,15))], \
+                      Sword("Catch the Rainbow", abbrv = "Rainbow Sword", attack = 15, usage =lambda self, creature : equip(creature,15)),
+                      Sword('Katana', 'Katana', attack = 15, usage =lambda self, creature : equip(creature,15)) ], \
                   2: [
                       Equipment('TNT','TNT', usage =lambda self, creature : throw(creature))  ], \
                   3: [
-                      Equipment("Moonstaff", "Moonstaff", usage =lambda self, creature : throw(creature))], \
+                      Equipment("Moonstaff", "Moonstaff", usage =lambda self, creature : throw(creature)),
+                      Armor('Blue Armor', 'Blue Armor', usage = lambda self, creature : equipArmor(creature,10)) ], \
                   }
     """ available monsters """
     monsters = {
@@ -1046,7 +1122,8 @@ class Game(object):
                 '"': lambda hero: theGame().hero.use(theGame().hero._inventory[2]),
                 "'": lambda hero: theGame().hero.use(theGame().hero._inventory[3]),
                 "(": lambda hero: theGame().hero.use(theGame().hero._inventory[4]),
-                "x": lambda hero : theGame().hero.unequipped()       
+                "x": lambda hero: theGame().hero.unequipped(),
+                "w": lambda hero: theGame().hero.unequippedArmor()       
        
                 }
 
@@ -1415,6 +1492,7 @@ class Game(object):
             canvasInventaire.create_rectangle(115,905,100+715*(theGame().hero.hunger/100),875, fill ='red')
             if theGame().hero.hunger == 0:
                 canvasInventaire.create_text(470,890, text = 'Vous perdez des hp', font = 'Arial 20', fill = 'cyan')
+        
         canvasInventaire.create_text(390,336, text = str(self.hero.hp), font = 'Arial 20')
         canvasInventaire.create_image(60,850, anchor = NW, image = textures['interface']['Apple'] )
 
@@ -1430,6 +1508,7 @@ class Game(object):
         self.hero.ecritInventaire()
         self.projectile.dessineProjectilesInventaire()
         self.sword.dessineEquippedSword()
+        self.armor.dessineEquippedArmor()
         self.money.showMoney()
         self.dessineVie()
         self.hero.dessineXp()
@@ -1462,13 +1541,22 @@ class Game(object):
                         theGame().hero.hp -=1
                     else:
                         theGame().hero.hunger-=theGame().hero.starve
-                        print ('starve : ', theGame().hero.starve)
                 
-                if 'WoU' in str(self):
+                if self.hero.poisoned is True:
+                    self.hero.poison+=1
+                    if self.hero.poison%2==0:
+                        self.hero.hp-=1
+                
+                if 'WoU' in str(self.floor):
                     theGame().calamitycpt+=1
                     if theGame().calamitycpt%15==0:
                         if len(theGame().hero._inventory)>0:
                             theGame().hero._inventory.remove(theGame().hero._inventory[0])    
+                
+                if self.hero.poisoned is True:
+                    self.hero.poison+=1
+                    if self.hero.poison%2==0:
+                        self.hero.hp-=1
 
                 canvasInventaire.delete('all')
                 canvas.delete('all')
@@ -1497,7 +1585,7 @@ class Game(object):
         canvasSelect.delete('all')
         if self.posInventaire-100 <0 :
             canvasSelect.create_image(0,0, anchor= NW, image = textures['interface']['select'])
-            self.posInventaire==0
+            self.posInventaire=0
 
         else:
             canvasSelect.create_image(0,self.posInventaire-100, anchor= NW, image = textures['interface']['select'])
@@ -1507,21 +1595,22 @@ class Game(object):
             self.select = 0
         else:
             self.select-=1
+        
     
     def goDown(self,event):
         canvasSelect.delete('all')
-        if self.posInventaire+100>599:
-            canvasSelect.create_image(0,599, anchor= NW, image = textures['interface']['select'])
-            self.posInventaire==599
+        if self.posInventaire+100>400:
+            canvasSelect.create_image(0,400, anchor= NW, image = textures['interface']['select'])
+            self.posInventaire=400
         else:
             canvasSelect.create_image(0,self.posInventaire+100, anchor= NW, image = textures['interface']['select'])
             self.posInventaire+=100
         
-        if self.select + 1 > len(theGame().hero._inventory):
-            self.select = len(theGame().hero._inventory)
+        if self.select >= 4:
+            self.select = 4
         else:    
             self.select += 1
-    
+
     def play(self):
         """1er étage"""
 
@@ -1568,7 +1657,7 @@ retry=Button(canvas, text = 'Retry', font =('Arial 20'), command = theGame().ret
 canvasInventaire = Canvas(window, width = w, height = h, bg = '#4C4C4C')
 canvasInventaire.place(relx=0.56, rely=0)
 
-canvasSelect = Canvas(window, width = 30, height= 638, bg = 'red' )
+canvasSelect = Canvas(window, width = 30, height= 438, bg = 'red' )
 canvasSelect.place(relx = 0.59, rely = 0.05)
 
 canvasGameOver = Canvas(window, width = 25, height= h, bg = 'red')
@@ -1596,7 +1685,8 @@ textures = {
         'sans R' : ImageTk.PhotoImage(Image.open(r"images jeu\killer sans2.png")),
         'sans U' : ImageTk.PhotoImage(Image.open(r"images jeu\killer sansUP.png")),
         'sans D' : ImageTk.PhotoImage(Image.open(r"images jeu\killer sansdown.png")),
-        'Metallica' : ImageTk.PhotoImage(Image.open(r"images jeu\Metallica.png"))
+        'Metallica' : ImageTk.PhotoImage(Image.open(r"images jeu\Metallica.png")),
+        
     } ,
     'items': {
         'TNT': ImageTk.PhotoImage(Image.open(r"images jeu\TNT.png")),
@@ -1610,12 +1700,19 @@ textures = {
         'Gun' : ImageTk.PhotoImage(Image.open(r"images jeu\coltPython.png")),
         'Bee' :  ImageTk.PhotoImage(Image.open(r"images jeu\Bee.png")),
         'Apple' : ImageTk.PhotoImage(Image.open(r"images jeu\apple_map.png").resize((40,40))),
-        'Pizza' : ImageTk.PhotoImage(Image.open(r"images jeu\pizza.png").resize((40,40)))
+        'Pizza' : ImageTk.PhotoImage(Image.open(r"images jeu\pizza.png").resize((40,40))),
+        'Katana' : ImageTk.PhotoImage(Image.open(r"images jeu\katana.png")),
+        'Blue Armor' : ImageTk.PhotoImage(Image.open(r"images jeu\blueArmor.png")),
     },  #### à redim
     'hero': {
         "Hero" : ImageTk.PhotoImage(Image.open(r'images jeu\monokuma.png')),
         "HeroCB": ImageTk.PhotoImage(Image.open(r"images jeu\monokumaCowBoy.png")),
-        "HeroInv" : ImageTk.PhotoImage(Image.open(r"images jeu\monokuma_invisible.png"))
+        "HeroCBInvisible": ImageTk.PhotoImage(Image.open(r"images jeu\monokumaCowBoyInvisible.png")),
+        "HeroInv" : ImageTk.PhotoImage(Image.open(r"images jeu\monokuma_invisible.png")),
+        'HeroSword' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaSword.png")),
+        'HeroSwordInvisible' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaSwordInvisible.png")),
+        'HeroKatana' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaKatana.png")),
+        'HeroKatanaInvisible' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaKatanaInvisible.png"))
     },
     'interface' : 
         {'money' : ImageTk.PhotoImage(Image.open(r"images jeu\dogecoinCanvas.png")),
