@@ -1,8 +1,11 @@
 #from Lerogue import theGame
+from abc import ABCMeta, abstractmethod
 import copy
 import math
 import random
 from tkinter import *
+from abc import ABC
+from playsound import playsound
 from PIL import Image, ImageTk
 import winsound
 # exceptions
@@ -51,9 +54,8 @@ class Coord(object):
         return Coord(0, 1)
 
 
-class Element(object):
-    """Base class for game elements. Have a name.
-        Abstract class."""
+class Element(metaclass = ABCMeta):
+    """Base class for game elements. Have a name."""
     def __init__(self, name, abbrv=""):
         self.name = name
         if abbrv == "":
@@ -106,7 +108,11 @@ class Food(Equipment):
         theGame().addMessage('You consumed the ' + self.name)
         return self.usage(self, creature)
 
-class Metal(Equipment):
+class MegaMetal(metaclass=ABCMeta):
+    def __init__(self, name, abbrv =''):
+        Equipment.__init__(self,name,abbrv)
+
+class Metal(MegaMetal,Equipment):
     """Metal"""
     def __init__(self,name,abbrv = '', attack = 0, usage = None):
         Equipment.__init__(self,name,abbrv)
@@ -147,8 +153,7 @@ class Projectile(Element):
         canvasInventaire.create_text(630,790, text = 'X ' + str(cptBee) , font = 'Arial 30') 
 
 
-
-class MetallicProjectile(Projectile):
+class MetallicProjectile(MegaMetal,Projectile):
     """Projectiles but metallic"""
     def __init__(self,name,abbrv = '', usage = None):
             Projectile.__init__(self,name,abbrv)
@@ -222,17 +227,18 @@ class Creature(Element):
                 self.hp -= other.strength - theGame().hero.protection
         else:
             self.hp -= other.strength
+        
         if str(other.abbrv) == 'Metallica':
             for j in theGame().hero._inventory:
-                if isinstance(j, Metal):
+                if isinstance(j, MegaMetal):
                     theGame().hero._inventory.remove(j)
             theGame().addEffect("Metallica destroyed your metallic stuff !\n" )
             for i in theGame().hero._stock:
-                if isinstance(i, MetallicProjectile):
+                if isinstance(i, MegaMetal):
                     theGame().hero._stock.remove(i)
             theGame().addEffect("Metallica destroyed your metallic ammos !")
-        theGame().addMessage("The " + other.name + " hits the " +
-                             self.name)
+        
+        theGame().addMessage("The " + other.name + " hits the " + self.name)
         if self.hp > 0:
             return False
         return True
@@ -371,10 +377,12 @@ class Hero(Creature):
             for i in range(self.lvl,self.lvl+10) :
                 if self.xp >= i**2 :
                     self.lvl+=1
-                    self.xp = self.xp-(i**2)
-                    self.hp = 60 + self.lvl*2
+                    self.xp -= i**2
+                    self.hp += 5 
                     self.strength+=2 + math.floor(self.lvl/7)
-                    self.hpMax+=60 + self.lvl*2
+                    self.hpMax += 5
+                    if self.lvl%4==0:
+                        self.protection += 1  
                 else :
                     break
     
@@ -506,12 +514,12 @@ class Room(object):
         map.put(self.randEmptyCoord(map), theGame().randEquipment())
         map.put(self.randEmptyCoord(map), theGame().randMonster())
         map.put(self.randEmptyCoord(map), theGame().randMoney())
+        map.put(self.randEmptyCoord(map), theGame().randAmmo())
 
 class Kids(Element):
     """Kids to pick up"""
-    def __init__(self, name, abbrv = " ", hp = 20):
+    def __init__(self, name, abbrv = " "):
         Element.__init__(self, name, abbrv)
-        self.hp = hp
     
     def meet(self,hero):
         hero.takeKids(self)
@@ -636,7 +644,7 @@ class Map(object):
                             canvas.create_image(j*50, i*50, anchor=NW, image = textures['mobs']['WoU'])
                             Map.WoU = True
                         
-                        if el.abbrv == 'Sans':
+                        if el.abbrv == 'Sans': ### peut regarder dans les 4 directions en fonction de la position du héro
                             if self.pos(el).direction(self.pos(self.hero)) == Coord(-1,0):
                                 canvas.create_image(j*50, i*50, anchor=NW, image = textures['mobs']['sans L'])
                             if self.pos(el).direction(self.pos(self.hero)) == Coord(1,0):
@@ -670,10 +678,16 @@ class Map(object):
                         elif 'Katana' in (str(i) for i in theGame().hero.sword):
                             if 'Iron Armor' in (str(i) for i in theGame().hero.armor):
                                 canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroIronArmorKatanaInvisible'])
+                            elif 'Blue Armor' in (str(i) for i in theGame().hero.armor):
+                                canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroBlueArmorKatanaInvisible'])                            
                             else:
                                 canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroKatanaInvisible'])
+                        
                         elif 'Iron Armor' in (str(i) for i in theGame().hero.armor):
                             canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroIronArmorInvisible'])
+                        
+                        elif 'Blue Armor' in (str(i) for i in theGame().hero.armor):
+                            canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroBlueArmorInvisible'])
                         else:
                             canvas.create_image(j*50, i*50, anchor = NW, image = textures['hero']['HeroInv'])
 
@@ -760,7 +774,6 @@ class Map(object):
 
     
     def dessineStairs(self):
-
         for i in range(len(self._mat)):
             for j in range(len(self._mat[i])):
                 if self.affiche(Coord(j,i)):
@@ -804,6 +817,7 @@ class Map(object):
                             canvas.create_image(j*50, i*50, anchor = NW, image = textures['items']['Arrow'])
                         if el.abbrv == 'Bee' :
                             canvas.create_image(j*50, i*50, anchor = NW, image = textures['items']['Bee'])
+    
     def addRoom(self, room):
         """Adds a room in the map."""
         self._roomsToReach.append(room)
@@ -825,9 +839,7 @@ class Map(object):
                 return False
         return True
 
-    def dig(
-        self, coord
-    ):  ### Transforme n'importe quelle case en Ground. Gère les salles atteintes.
+    def dig(self, coord):  ### Transforme n'importe quelle case en Ground. Gère les salles atteintes.
         """Puts a ground cell at the given coord.
             If the coord corresponds to a room, considers the room reached."""
         self._mat[coord.y][coord.x] = Map.ground
@@ -972,9 +984,6 @@ class Map(object):
                 elif self.get(dest) != Map.empty  and self.get(dest).meet(
                         e) and self.get(dest) != self.hero:
                         
-                        if self.pos(theGame().hero).distance(self.pos(self.get(dest))) == 0:
-                            return
-                        
                         if isinstance(self.get(dest), Kids):
                             theGame().l.remove(self.get(dest))
                         if isinstance(self.get(dest), Creature):
@@ -989,9 +998,6 @@ class Map(object):
                         self.rm(dest)
                         self._mat[dest.y][dest.x] = e
                         self._elem[e] = dest
-
-
-
 
     def moveAllMonsters(
         self
@@ -1014,7 +1020,11 @@ class Map(object):
             
 
 def makeInvisible(creature) :
-    theGame().hero.invisible = 20
+    if creature == theGame().hero:
+
+        theGame().hero.invisible = 20
+    else:
+        creature.hp-=10
     return True
 
 def makeVisible(creature) :
@@ -1038,8 +1048,9 @@ def nourrir(creature,qte) :
             creature.hunger = 100
         else :
             creature.hunger += qte
-        return True
-    return False
+    else:
+        creature.hp+=30
+    return True
 
 def teleport(creature, unique):
     """Teleport the creature"""
@@ -1053,43 +1064,49 @@ def teleport(creature, unique):
 
 def equip(creature,attack):
     """ equip the hero with a weapon"""
-    theGame().hero.equipped = True 
-    if len(theGame().hero.sword) == 0:
-        theGame().hero.strength+=attack
-    
-    elif len(theGame().hero.sword) != 0 and len(theGame().hero._inventory) < 5:
-        theGame().hero._inventory.append(theGame().hero.sword[0])
-        theGame().hero.sword.remove(theGame().hero.sword[0])
-    
-    elif len(theGame().hero.sword) != 0 and len(theGame().hero._inventory) >=5:
-        theGame().hero.sword.remove(theGame().hero.sword[0])
-
-    return True
-
-def equipArmor(creature, armor):
-    theGame().hero.armored = True
-    if len(theGame().hero.armor) == 0:
-        theGame().hero.protection+=armor
-    
-    elif len(theGame().hero.armor) != 0 and len(theGame().hero._inventory) < 5:
-        theGame().hero._inventory.append(theGame().hero.armor[0])
-        theGame().hero.armor.remove(theGame().hero.armor[0])
-
-    elif len(theGame().hero.sword) != 0 and len(theGame().hero._inventory) >=5:
-        theGame().hero.armor.remove(theGame().hero.armor[0]) 
-
-    return True 
-def throw(creature):
     if creature == theGame().hero:
-        if creature.hp + 30 >= creature.hpMax:
-            creature.hp = creature.hpMax
-        else:
-            creature.hp += 30
+        theGame().hero.equipped = True 
+        if len(theGame().hero.sword) == 0:
+            theGame().hero.strength+=attack
+        
+        elif len(theGame().hero.sword) != 0 and len(theGame().hero._inventory) < 5:
+            theGame().hero._inventory.append(theGame().hero.sword[0])
+            theGame().hero.sword.remove(theGame().hero.sword[0])
+        
+        elif len(theGame().hero.sword) != 0 and len(theGame().hero._inventory) >=5:
+            theGame().hero.sword.remove(theGame().hero.sword[0])
     else:
         creature.hp-=50
         if creature.hp<0:
             theGame().hero.addXP(theGame().floor.get(theGame().floor.pos(creature)).xp)
             theGame().floor.rm(theGame().floor.pos(creature))
+    return True
+
+def equipArmor(creature, armor):
+    if creature == theGame().hero:
+        theGame().hero.armored = True
+        if len(theGame().hero.armor) == 0:
+            theGame().hero.protection+=armor
+        
+        elif len(theGame().hero.armor) != 0 and len(theGame().hero._inventory) < 5:
+            theGame().hero._inventory.append(theGame().hero.armor[0])
+            theGame().hero.armor.remove(theGame().hero.armor[0])
+
+        elif len(theGame().hero.sword) != 0 and len(theGame().hero._inventory) >=5:
+            theGame().hero.armor.remove(theGame().hero.armor[0]) 
+    
+    else:
+        creature.hp-=50
+        if creature.hp<0:
+            theGame().hero.addXP(theGame().floor.get(theGame().floor.pos(creature)).xp)
+            theGame().floor.rm(theGame().floor.pos(creature))
+    return True 
+
+def throw(creature,dmg):
+    creature.hp-=dmg
+    if creature.hp<0:
+        theGame().hero.addXP(theGame().floor.get(theGame().floor.pos(creature)).xp)
+        theGame().floor.rm(theGame().floor.pos(creature))
 
     return True
 
@@ -1105,16 +1122,30 @@ class Game(object):
                       Food("Apple", "Apple", usage=lambda self, creature: nourrir(creature, 30)),
                       Armor('Iron Armor', 'Iron Armor', usage = lambda self, creature : equipArmor(creature,10)) ], \
                   1: [
-                      Metal('Gun', 'Gun', attack = 30,usage =lambda self, creature : equip(creature, 30)),
+                      Metal('Gun', 'Gun', attack = 30,usage =lambda self, creature : equip(creature, 0)),
+                    Metal('Gun', 'Gun', attack = 30,usage =lambda self, creature : equip(creature, 0)),
+                      Metal('Gun', 'Gun', attack = 30,usage =lambda self, creature : equip(creature, 0)),
+                      Metal('Gun', 'Gun', attack = 30,usage =lambda self, creature : equip(creature, 0)),
+                      Metal('Gun', 'Gun', attack = 30,usage =lambda self, creature : equip(creature, 0)),
+
                       Food('Pizza', 'Pizza', usage=lambda self, creature: nourrir(creature, 50)),
-                      Sword("Catch the Rainbow", abbrv = "Rainbow Sword", attack = 15, usage =lambda self, creature : equip(creature,15)),
-                      Sword('Katana', 'Katana', attack = 15, usage =lambda self, creature : equip(creature,15)) ], \
+                      Sword("Catch the Rainbow", abbrv = "Rainbow Sword", attack = 12, usage =lambda self, creature : equip(creature,12)),
+                      Sword('Katana', 'Katana', attack = 10, usage =lambda self, creature : equip(creature,10)),
+                       ], \
                   2: [
-                      Equipment('TNT','TNT', usage =lambda self, creature : throw(creature))  ], \
+                      Equipment('TNT','TNT', usage =lambda self, creature : throw(creature,70))  ], \
                   3: [
                       Equipment("Moonstaff", "Moonstaff", usage =lambda self, creature : throw(creature)),
                       Armor('Blue Armor', 'Blue Armor', usage = lambda self, creature : equipArmor(creature,12)) ], \
                   }
+    munitions = {0 :[MetallicProjectile("Bee", "Bee"),
+                    MetallicProjectile("Bee", "Bee"),
+                    MetallicProjectile("Bee", "Bee"),
+                    MetallicProjectile("Bee", "Bee"),
+                    MetallicProjectile("Bee", "Bee"),
+                    MetallicProjectile("Bee", "Bee"),
+                 ]
+}
     """ available monsters """
     monsters = {
         0: [
@@ -1123,7 +1154,7 @@ class Game(object):
             Creature("Harvest", 2, xp=1),
             Creature("Doge",4, xp=1),
         ],
-        1: [Creature("Blob", 5,xp=2)
+        1: [Creature("Blob", 10,xp=2)
             ],
          
         6: [Creature("Dragon", 8, abbrv = 'Dragon', strength=3, xp=4)],
@@ -1225,10 +1256,14 @@ class Game(object):
         else:
             presentWoU = False
         
-            
-        self.hero.hp+=30
+        if self.hero.hp+30>self.hero.hpMax:   
+            self.hero.hp=self.hero.hpMax
+        else:
+            self.hero.hp+=30
+        
         self.level+=1
         self.buildFloor()
+        
         if 'stairs' not in str(self.floor):
             randomRoom = random.randint(1, len(self.floor._mat))
             self.floor._mat[self.floor._rooms[randomRoom].center().y][self.floor._rooms[randomRoom].center().x] = 'stairs'
@@ -1246,7 +1281,7 @@ class Game(object):
                         
 
                                         ### si chariot n'est pas dans la salle et chariot mort dans la salle précédente    
-            if 'Silver Chariot' not in str(self.copieNext) and present == True:
+            elif 'Silver Chariot' not in str(self.copieNext) and present == True:
                 winsound.PlaySound(r"musique jeu\ClosingArgumentDGS.wav", winsound.SND_ASYNC)
         
         if 'WoU' in str(self.copieNext) and presentWoU is False:
@@ -1254,10 +1289,7 @@ class Game(object):
         if 'WoU' not in str(self.copieNext) and presentWoU is True:
                 winsound.PlaySound(r"musique jeu\ClosingArgumentDGS.wav", winsound.SND_ASYNC)
 
-                   #### si chariot dans la salle et chariot mort de la salle précédente
-
-    
-          
+                   #### si chariot dans la salle et chariot mort de la salle précédente     
         self.press
 
     def addMessage(self, msg):  #### ajoute un message à la liste de messages
@@ -1296,7 +1328,6 @@ class Game(object):
             a.hp+=self.bonus
             a.xp+=self.bonus/2
 
-        
         return a
     
     def randEquipment(self):  #### génère un équipement aléatore
@@ -1310,7 +1341,10 @@ class Game(object):
     def randMoney(self):
 
         return self.randElement(Game.money)
-    
+    def randAmmo(self):
+        
+        return self.randElement(Game.munitions)
+
     def putRandomKids(self): ### put des kids dans la map
         if self.l == []:
             self.l = [self.Monosuke,self.Monophanie,self.Monotaro,self.Monodam,self.Monokid]
@@ -1356,13 +1390,7 @@ class Game(object):
     def throwUP(self,event):
         a = theGame().floor.pos(theGame().hero)
         b = copy.deepcopy(a)
-        if len(theGame().hero._inventory) == 0:
-            theGame().addMessage("Empty inventory, can't throw")
-            canvasInventaire.delete('all')
-            canvas.delete('all')
-            self.dessineTout()
-            return False
-        
+            
         try:
             while theGame().floor.get(Coord(b.x,b.y-1))!=Map.empty:
                 b.y-=1
@@ -1374,20 +1402,38 @@ class Game(object):
             b.y = 0
             creature = False
         
-        if creature is False:
-            
-            if isinstance(theGame().floor.get(Coord(b.x,b.y)), Equipment) or isinstance(theGame().floor.get(Coord(b.x,b.y)), Money):
-                theGame().floor.rm(Coord(b.x,b.y))
-            
-            elif isinstance(theGame().floor.get(Coord(b.x,b.y)),Kids):
-                theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
+        if 'Gun' not in (str(i) for i in self.hero.sword) or 'Bee' not in (str(j) for j in self.hero._stock):
+            if len(theGame().hero._inventory) == 0:
+                theGame().addMessage("Empty inventory, can't throw")
+                canvasInventaire.delete('all')
+                canvas.delete('all')
+                self.dessineTout()
+                return False
+            if creature is False:
+                    
+                if isinstance(theGame().floor.get(Coord(b.x,b.y)), Equipment) or isinstance(theGame().floor.get(Coord(b.x,b.y)), Money):
+                    theGame().floor.rm(Coord(b.x,b.y))
+                    
+                elif isinstance(theGame().floor.get(Coord(b.x,b.y)),Kids):
+                    theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
+                
 
-            theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[self.select])
+                theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[self.select])
+            else:
+                theGame().floor.get(Coord(b.x,b.y)).use(theGame().hero._inventory[self.select])
+            theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
 
         else:
-            theGame().floor.get(Coord(b.x,b.y)).use(theGame().hero._inventory[self.select])
-        
-        theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
+            for i in self.hero._stock:
+                if str(i) == 'Bee':
+                    self.hero._stock.remove(i)
+                    playsound(r'musique jeu\Gunshot.wav')
+                    if creature is True:
+                        theGame().floor.get(Coord(b.x,b.y)).hp-=50
+                        if theGame().floor.get(Coord(b.x,b.y)).hp<0:
+                            theGame().hero.addXP(theGame().floor.get(Coord(b.x,b.y)).xp)
+                            theGame().floor.rm(theGame().floor.pos(theGame().floor.get(Coord(b.x,b.y))))
+                    break
 
         
         canvasInventaire.delete('all')
@@ -1398,15 +1444,7 @@ class Game(object):
 
     def throwDown(self,event): ### doit vérifier qu'il y ait pas d'item sur la case d'arrivée
         a = theGame().floor.pos(theGame().hero)
-        b = copy.deepcopy(a)
-        
-        if len(theGame().hero._inventory) == 0:
-            theGame().addMessage("Empty inventory, can't throw")
-            canvasInventaire.delete('all')
-            canvas.delete('all')
-            self.dessineTout()
-            return False
-        
+        b = copy.deepcopy(a)      
         try:
             while theGame().floor.get(Coord(b.x,b.y+1))!=Map.empty:
                 b.y+=1
@@ -1417,21 +1455,40 @@ class Game(object):
         except IndexError:
             b.y = theGame().floor.size-1
             creature = False
+        
+        if 'Gun' not in (str(i) for i in self.hero.sword) or 'Bee' not in (str(j) for j in self.hero._stock):
+            if len(theGame().hero._inventory) == 0:
+                theGame().addMessage("Empty inventory, can't throw")
+                canvasInventaire.delete('all')
+                canvas.delete('all')
+                self.dessineTout()
+                return False
+            if creature is False:
+                if isinstance(theGame().floor.get(Coord(b.x,b.y)), Equipment) or isinstance(theGame().floor.get(Coord(b.x,b.y)), Money):
+                    theGame().floor.rm(Coord(b.x,b.y))
+                
+                elif isinstance(theGame().floor.get(Coord(b.x,b.y)),Kids):
+                    theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
 
-        if creature is False:
-            if isinstance(theGame().floor.get(Coord(b.x,b.y)), Equipment) or isinstance(theGame().floor.get(Coord(b.x,b.y)), Money):
-                theGame().floor.rm(Coord(b.x,b.y))
+                theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[self.select])
             
-            elif isinstance(theGame().floor.get(Coord(b.x,b.y)),Kids):
-                theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
-
-            theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[self.select])
+            else:
+                theGame().floor.get(Coord(b.x,b.y)).use(theGame().hero._inventory[self.select])
         
+            theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
         else:
-            theGame().floor.get(Coord(b.x,b.y)).use(theGame().hero._inventory[self.select])
-        
-        theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
-        
+            for i in self.hero._stock:
+                if str(i) == 'Bee':
+                    self.hero._stock.remove(i)
+                    playsound(r'musique jeu\Gunshot.wav')
+                    if creature is True:
+                        theGame().floor.get(Coord(b.x,b.y)).hp-=50
+                        if theGame().floor.get(Coord(b.x,b.y)).hp<0:
+                            theGame().hero.addXP(theGame().floor.get(Coord(b.x,b.y)).xp)
+                            theGame().floor.rm(theGame().floor.pos(theGame().floor.get(Coord(b.x,b.y))))
+
+                    break
+
         canvasInventaire.delete('all')
         canvas.delete('all')
         self.floor.moveAllMonsters()
@@ -1441,12 +1498,6 @@ class Game(object):
     def throwRight(self,event): ### doit vérifier qu'il y ait pas d'item sur la case d'arrivée
         a = theGame().floor.pos(theGame().hero)
         b = copy.deepcopy(a)
-        if len(theGame().hero._inventory) == 0:
-            theGame().addMessage("Empty inventory, can't throw")
-            canvasInventaire.delete('all')
-            canvas.delete('all')
-            self.dessineTout()
-            return False
         try:
             while theGame().floor.get(Coord(b.x+1,b.y))!=Map.empty:
                 b.x+=1
@@ -1457,21 +1508,40 @@ class Game(object):
         except IndexError:
             b.x = theGame().floor.size-1
             creature = False
-  
-        if creature is False:
-            if isinstance(theGame().floor.get(Coord(b.x,b.y)), Equipment) or isinstance(theGame().floor.get(Coord(b.x,b.y)), Money):
-                theGame().floor.rm(Coord(b.x,b.y))
-            
-            elif isinstance(theGame().floor.get(Coord(b.x,b.y)),Kids):
-                theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
+        
+        if 'Gun' not in (str(i) for i in self.hero.sword) or 'Bee' not in (str(j) for j in self.hero._stock):
+            if len(theGame().hero._inventory) == 0:
+                theGame().addMessage("Empty inventory, can't throw")
+                canvasInventaire.delete('all')
+                canvas.delete('all')
+                self.dessineTout()
+                return False
+            if creature is False:
+                if isinstance(theGame().floor.get(Coord(b.x,b.y)), Equipment) or isinstance(theGame().floor.get(Coord(b.x,b.y)), Money):
+                    theGame().floor.rm(Coord(b.x,b.y))
+                
+                elif isinstance(theGame().floor.get(Coord(b.x,b.y)),Kids):
+                    theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
 
-            theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[self.select])
+                theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[self.select])
+            
+            else:
+                theGame().floor.get(Coord(b.x,b.y)).use(theGame().hero._inventory[self.select])
+        
+            theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
         
         else:
-            theGame().floor.get(Coord(b.x,b.y)).use(theGame().hero._inventory[self.select])
-        
-        theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
-
+            for i in self.hero._stock:
+                if str(i) == 'Bee':
+                    self.hero._stock.remove(i)
+                    playsound(r'musique jeu\Gunshot.wav')
+                    if creature is True:
+                        theGame().floor.get(Coord(b.x,b.y)).hp-=50
+                        if theGame().floor.get(Coord(b.x,b.y)).hp<0:
+                            theGame().hero.addXP(theGame().floor.get(Coord(b.x,b.y)).xp)
+                            theGame().floor.rm(theGame().floor.pos(theGame().floor.get(Coord(b.x,b.y))))                   
+                    break
+                    
         canvasInventaire.delete('all')
         canvas.delete('all')
         self.floor.moveAllMonsters()
@@ -1480,12 +1550,7 @@ class Game(object):
     def throwLeft(self,event): ### doit vérifier qu'il y ait pas d'item sur la case d'arrivée
         a = theGame().floor.pos(theGame().hero)
         b = copy.deepcopy(a)
-        if len(theGame().hero._inventory) == 0:
-            theGame().addMessage("Empty inventory, can't throw")
-            canvasInventaire.delete('all')
-            canvas.delete('all')
-            self.dessineTout()
-            return False
+
         try:
             while theGame().floor.get(Coord(b.x-1,b.y))!=Map.empty:
                 b.x-=1
@@ -1496,22 +1561,40 @@ class Game(object):
         except IndexError:
             b.x = theGame().floor.size-1
             creature = False
-  
-        if creature is False:
-            
-            if isinstance(theGame().floor.get(Coord(b.x,b.y)), Equipment) or isinstance(theGame().floor.get(Coord(b.x,b.y)), Money):
-                theGame().floor.rm(Coord(b.x,b.y))
-            
-            elif isinstance(theGame().floor.get(Coord(b.x,b.y)),Kids):
-                theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
+        if 'Gun' not in (str(i) for i in self.hero.sword) or 'Bee' not in (str(j) for j in self.hero._stock):
+            if len(theGame().hero._inventory) == 0:
+                theGame().addMessage("Empty inventory, can't throw")
+                canvasInventaire.delete('all')
+                canvas.delete('all')
+                self.dessineTout()
+                return False
+            if creature is False:
+                
+                if isinstance(theGame().floor.get(Coord(b.x,b.y)), Equipment) or isinstance(theGame().floor.get(Coord(b.x,b.y)), Money):
+                    theGame().floor.rm(Coord(b.x,b.y))
+                
+                elif isinstance(theGame().floor.get(Coord(b.x,b.y)),Kids):
+                    theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
 
-            theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[self.select])
+                theGame().floor.put(Coord(b.x,b.y), theGame().hero._inventory[self.select])
 
+            else:
+                theGame().floor.get(Coord(b.x,b.y)).use(theGame().hero._inventory[self.select])
+            
+            theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
         else:
-            theGame().floor.get(Coord(b.x,b.y)).use(theGame().hero._inventory[self.select])
-        
-        theGame().hero._inventory.remove(theGame().hero._inventory[self.select])
-        
+            for i in self.hero._stock:
+                if str(i) == 'Bee':
+                    self.hero._stock.remove(i)
+                    playsound(r'musique jeu\Gunshot.wav')
+                    if creature is True:
+                        theGame().floor.get(Coord(b.x,b.y)).hp-=50
+                        if theGame().floor.get(Coord(b.x,b.y)).hp<0:
+                            theGame().hero.addXP(theGame().floor.get(Coord(b.x,b.y)).xp)
+                            theGame().floor.rm(theGame().floor.pos(theGame().floor.get(Coord(b.x,b.y))))
+
+                    break
+ 
         canvasInventaire.delete('all')
         canvas.delete('all')
         self.floor.moveAllMonsters()
@@ -1574,8 +1657,9 @@ class Game(object):
                 else :
                     theGame().hero.invisible -= 1
                     if theGame().hero.invisible <= 0 :
-                        theGame().hero.invisible = None
                 
+                        theGame().hero.invisible = None 
+                ### status
                 theGame().hero.faim+=1
                 if theGame().hero.faim%3==0:
                     if theGame().hero.hunger-theGame().hero.starve<0:
@@ -1589,36 +1673,37 @@ class Game(object):
                     if self.hero.poison%2==0:
                         self.hero.hp-=1
                 
+                #### mob abilties
                 if 'WoU' in str(self.floor):
-                    theGame().calamitycpt+=1
+                    if self.level < 10:
+                        theGame().calamitycpt+=1
+                    elif 10<=self.level<13 :
+                        theGame().calamitycpt+=2
+                    elif self.level>=13:
+                        theGame().calamitycpt+=3
                     if theGame().calamitycpt%15==0:
                         if len(theGame().hero._inventory)>0:
                             theGame().hero._inventory.remove(theGame().hero._inventory[0])    
-                
-                if self.hero.poisoned is True:
-                    self.hero.poison+=1
-                    if self.hero.poison%2==0:
-                        self.hero.hp-=1
-
+                    
                 canvasInventaire.delete('all')
                 canvas.delete('all')
                 self.dessineTout()
                 window.update()
-                self.continuer(event)
+                self.press
 
     def retry(self):
         window.bind('<Any-KeyPress>', theGame().press)
         theGame().play()
+
 #### inventaire
     def selectionnerInventaire(self):
+        self.select=0
         canvasSelect.focus_set()
         canvasSelect.delete('all')
 
         canvasSelect.create_image(0,0, anchor= NW, image = textures['interface']['select'])
         canvasSelect.bind('<Up>', self.goUp)
         canvasSelect.bind('<Down>', self.goDown)
-
-
     
     def goUp(self,event):
         canvasSelect.delete('all')
@@ -1634,8 +1719,7 @@ class Game(object):
             self.select = 0
         else:
             self.select-=1
-        
-    
+         
     def goDown(self,event):
         canvasSelect.delete('all')
         if self.posInventaire+100>400:
@@ -1668,8 +1752,6 @@ class Game(object):
         window.bind('<Alt-KeyPress-q>', self.throwLeft)
         window.bind('<Any-KeyPress>',self.press)
         self.floor.moveAllMonsters()
-    
-
     
     def continuer(self,event):
         self.press
@@ -1760,6 +1842,7 @@ textures = {
         'HeroKatana' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaKatana.png")),
         'HeroKatanaInvisible' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaKatanaInvisible.png")),
         'HeroBlueArmorKatana' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaBlueArmorKatana.png")),
+        'HeroBlueArmorKatanaInvisible' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaBlueArmorKatanaInvisible.png")),
 
         'HeroIronArmor' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaIronArmor.png")),
         'HeroIronArmorInvisible' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaIronArmorInvisible.png")),
@@ -1776,6 +1859,7 @@ textures = {
         'HeroIronArmorCowBoyInvisible' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaIronArmorCowBoyInvisible.png")),
 
         'HeroBlueArmor' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaBlueArmor.png")),
+        'HeroBlueArmorInvisible' : ImageTk.PhotoImage(Image.open(r"images jeu\monokumaBlueArmorInvisible.png")),
 
     },
     'interface' : 
