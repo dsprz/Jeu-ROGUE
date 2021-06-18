@@ -763,6 +763,10 @@ class Map(object):
 
                         if el.abbrv == 'Enigma':
                             canvas.create_image(j*50, i*50, anchor=NW, image = textures['mobs']['Enigma'])
+                        
+                        if el.abbrv == 'Akaza':
+                            canvas.create_image(j*50, i*50, anchor=NW, image = textures['mobs']['Akaza'])
+
                    
 
 
@@ -1347,7 +1351,8 @@ class Game(object):
     }
     Cmonsters = {
         0: [
-            Creature("Enigma", 1, abbrv = 'Enigma', strength = 1, xp=1),]}
+            Creature("Enigma", 1, abbrv = 'Enigma', strength = 1, xp=1),
+            Creature("Akaza", 1, abbrv = 'Akaza', strength = 1, xp=1)]}
     """Escaliers"""
     element = {
         0:
@@ -2039,6 +2044,7 @@ textures = {
         'Metallica' : ImageTk.PhotoImage(Image.open(r"images jeu\Metallica.png")),
         'C-Moon' : ImageTk.PhotoImage(Image.open(r"images jeu\Cmoon.png")),
         'Enigma' : ImageTk.PhotoImage(Image.open(r"images jeu\Enigma.png")),
+        'Akaza' : ImageTk.PhotoImage(Image.open(r"images jeu\akaza.png")),
         
     } ,
     'items': {
