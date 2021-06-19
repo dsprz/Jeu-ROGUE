@@ -78,16 +78,40 @@ class Element(ABC):
 
 class Equipment(Element):
     """A piece of equipment"""
-    def __init__(self, name, abbrv="", usage=None):
+    def __init__(self, name, abbrv="", usage=None,nonShop=True,price=0):
         Element.__init__(self, name, abbrv)
         self.usage = usage
+        self.nonShop=nonShop
+        self.price=price
 
     def meet(self, hero):
         """Makes the hero meet an element. The hero takes the element."""
-        if len(theGame().hero._inventory)<5:
+        if self.price==9999 :
+            theGame().addMessage("Take a look !")
+            return False
+        if self.nonShop:
+           if len(theGame().hero._inventory)<5:
+                hero.take(self)
+                theGame().addMessage("You pick up a " + self.name)
+                return True
+        if hero.banque>=self.price:
+                hero.banque-=self.price
+                hero.take(self)
+                theGame().addMessage("You buy a " + self.name)
+                return True           
+        theGame().addMessage('Not enough money !')
+        theGame().steal+=1
+        if theGame().steal==5:
+            rng = random.randint(1,2)
+            if rng == 1:
+                theGame().addEffect('You filthy thief !')
+            if rng == 2:
+                theGame().addEffect('Stop right there criminal scum !')
+            theGame().thief=True
             hero.take(self)
-            theGame().addMessage("You pick up a " + self.name + '\n')
-        return True
+            theGame().steal=0
+            return True
+        return False
     
     def use(self, creature):
         """Uses the piece of equipment. Has effect on the hero according usage.
@@ -138,19 +162,23 @@ class Season:
             canvasInventaire.create_image(510,940, anchor = NW, image = textures['season']['spring'])
             canvasInventaire.create_text(450,960, text = 'Spring', font = 'Arial 25', fill = 'green')
 
-        elif 7<=theGame().level<15:
-            canvasInventaire.create_image(350,940, anchor = NW, image = textures['season']['summer'])
-            canvasInventaire.create_text(450,960, text = 'Spring', font = 'Arial 25', fill = 'red')
-        elif 15<=theGame().level<20:
-            canvasInventaire.create_image(300,500, anchor = NW, image = textures['season']['fall'])
-        elif theGame().level >=20:
-            canvasInventaire.create_image(300,500, anchor = NW, image = textures['season']['winter'])
+        if 7<=theGame().level<15:
+            canvasInventaire.create_image(330,935, anchor = NW, image = textures['season']['summer'])
+            canvasInventaire.create_text(450,960, text = 'Summer', font = 'Arial 25', fill = 'red')
+        elif 15<=theGame().level<23:
+            canvasInventaire.create_image(375,935, anchor = NW, image = textures['season']['fall'])
+            canvasInventaire.create_image(482,935, anchor = NW, image = textures['season']['fall'])
+            canvasInventaire.create_text(450,960, text = 'Fall', font = 'Arial 25', fill = 'orange')
 
+        elif theGame().level >=23:
+            canvasInventaire.create_image(350,935, anchor = NW, image = textures['season']['winter'])
+            canvasInventaire.create_image(497,935, anchor = NW, image = textures['season']['winter2'])
+            canvasInventaire.create_text(450,960, text = 'Winter', font = 'Arial 25', fill = 'cyan')
 
 class Food(Equipment):
     """Food"""
-    def __init__(self, name, abbrv = '', usage = None):
-        Equipment.__init__(self, name, abbrv, usage)
+    def __init__(self, name, abbrv = '', usage = None, nonShop=True,price=0):
+        Equipment.__init__(self, name, abbrv, usage, nonShop,price)
     
     def use(self, creature):
         theGame().addMessage('You consumed the ' + self.name  + '\n')
@@ -166,8 +194,8 @@ class MegaMetal(ABC):
 
 class Metal(Equipment, MegaMetal):
     """Metal"""
-    def __init__(self,name,abbrv = '', attack = 0, usage = None):
-        Equipment.__init__(self,name,abbrv)
+    def __init__(self,name,abbrv = '', attack = 0, usage = None, nonShop=True,price=0):
+        Equipment.__init__(self,name,abbrv,nonShop,price)
         self.usage = usage
         self.attack = attack
     
@@ -219,8 +247,8 @@ class MetallicProjectile(MegaMetal,Element):
             
 class Sword(Equipment):
     """Swords"""
-    def __init__(self, name, abbrv= '',attack = 10, usage = None):
-        Equipment.__init__(self, name, abbrv, usage)
+    def __init__(self, name, abbrv= '',attack = 10, usage = None, nonShop=True,price=0):
+        Equipment.__init__(self, name, abbrv, usage, nonShop,price)
         self.attack = attack
         self.usage = usage
     
@@ -247,8 +275,8 @@ class Sword(Equipment):
 
 class Armor(Equipment):
     """Armors"""
-    def __init__(self,name, abbrv = '', armor = 10,usage = None):
-        Equipment.__init__(self, name, abbrv, usage)
+    def __init__(self,name, abbrv = '', armor = 10,usage = None, nonShop=True,price=0):
+        Equipment.__init__(self, name, abbrv, usage, nonShop,price)
         self.usage = usage
         self.armor = armor
     
@@ -626,6 +654,29 @@ class Room(object):
     def Cdecorate(self, map):
         map.put(self.randEmptyCoord(map), theGame().randCMonster())
 
+class Shop(Room):
+    """Une salle dédiée à l'achat d'items"""
+    def __init__(self, c):
+        Room.__init__(self,c,c+Coord(4,3))
+
+    def decorate(self,map):
+        if map.get(self.center()+Coord(-1,0)) !=Map.ground:
+            map.rm(self.center()+Coord(-1,0))
+        map.put(self.center()+Coord(-1,0),theGame().randShopItem())
+        
+        if map.get(self.center()+Coord(1,0)) !=Map.ground:
+            map.rm(self.center()+Coord(1,0))       
+        map.put(self.center()+Coord(1,0),theGame().randShopItem())
+        
+        if not theGame().thief :
+            if map.get(self.center()+Coord(0,1)) !=Map.ground:
+                map.rm(self.center()+Coord(0,1)) 
+
+            map.put(self.center()+Coord(0,1),Equipment('Merchant','MerchantIt',nonShop=False,price=9999))
+        else :
+            map.put(self.center()+Coord(0,1),Creature('Merchant',50,abbrv='Merchant',strength=15,xp=60))
+    
+
 class Kids(Element):
     """Kids to pick up"""
     def __init__(self, name, abbrv = " "):
@@ -675,6 +726,8 @@ class Map(object):
         if hero is None:
             hero = Hero()
         self.hero = hero
+        self.generateRooms(1)
+        self.addRoom(Shop(self.randCoordPlus(Coord(4,3))))
         while len(self._roomsToReach) < 6:
             self.generateRooms(1)
         self.reachAllRooms()
@@ -802,7 +855,9 @@ class Map(object):
 
                         if el.abbrv == 'Hoopa':
                             canvas.create_image(j*50, i*50, anchor=NW, image = textures['mobs']['Hoopa'])                  
-
+                        
+                        if el.abbrv == 'Merchant' or el.abbrv == 'MerchantIt':
+                            canvas.create_image(j*50, i*50, anchor=NW, image = textures['mobs']['Merchant'])        
 
     def drawHero(self):
         for i in range(len(self._mat)):
@@ -1056,6 +1111,9 @@ class Map(object):
             r = self.randRoom()
             if self.intersectNone(r):
                 self.addRoom(r)
+    def randCoordPlus(self,roomSize):  #Retourne une coordonnée aléatoire, dans une certaine zone.
+        return Coord(random.randrange(self.size - roomSize.x),
+                     random.randrange(self.size - roomSize.y))
 
     def __len__(self):
         return len(self._mat)
@@ -1081,7 +1139,7 @@ class Map(object):
             raise IndexError('Out of map coord')
 
     def checkElement(self, o):
-        ""r"Check if o is an Element."""
+        """Check if o is an Element."""
         if not isinstance(o, Element):
             raise TypeError('Not a Element')
 
@@ -1353,6 +1411,18 @@ class Game(object):
                   7: [Food('The Chicken', 'Chicken', usage = lambda self, creature : nourrir(creature, 75, name = 'Chicken')),
                     Metal('Bodyguard 638', 'Bodyguard 638', attack = 0, usage = lambda self, creature : equip(creature,0))]
                   }
+    shopInv = {0: [
+                      Metal('Gun', 'Gun', attack = 0,usage =lambda self, creature : equip(creature, 0),nonShop=False,price=7),
+                      Food('Pizza', 'Pizza', usage=lambda self, creature: nourrir(creature, 50),nonShop=False,price=7),
+                      Sword("Catch the Rainbow", abbrv = "Rainbow Sword", attack = 12, usage =lambda self, creature : equip(creature,12),nonShop=False,price=7),
+                      Sword('Katana', 'Katana', attack = 10, usage =lambda self, creature : equip(creature,10),nonShop=False,price=7),
+                       ], \
+                  1: [
+                      Equipment('TNT','TNT', usage =lambda self, creature : throw(creature,70),nonShop=False,price=13)  ], \
+                  2: [
+                      Equipment("Moonstaff", "Moonstaff", usage =lambda self, creature : throw(creature,10),nonShop=False,price=20),
+                      Armor('Blue Armor', 'Blue Armor', usage = lambda self, creature : equipArmor(creature,12),nonShop=False,price=20) ]}
+
     munitions = {0 :[MetallicProjectile("Bee Gees", "Bee"),
                     MetallicProjectile("Bee Gees", "Bee"),
                     MetallicProjectile("Bee Gees", "Bee"),
@@ -1368,8 +1438,7 @@ class Game(object):
             Creature("Napstablook", 2, abbrv ='Napstablook', xp=1),
             Creature("Harvest", 2, xp=1),
             Creature("Doge",4, xp=1),
-            Creature('C-Moon', 30, abbrv = 'C-Moon', strength = 20, xp = 35),
-            Creature('C-Moon', 30, abbrv = 'C-Moon', strength = 20, xp = 35)
+
         ],
         1: [Creature("Blob", 10,xp=2),],
 
@@ -1422,7 +1491,8 @@ class Game(object):
                 }
 
     def __init__(self, level=1, hero=None):
-        self.excluded ={}
+        self.thief=False
+        self.steal=0
         self.level = level
         self._message = []
         self.effect = []
@@ -1532,7 +1602,7 @@ class Game(object):
         for m in self.effect:
             s+=m
         self.effect.clear()
-        canvasInventaire.create_text(200,500, text = s, font = 'Arial', fill = 'blue')
+        canvasInventaire.create_text(700,500, text = s, font = 'Arial', fill = 'blue')
 
     def randElement(self, collect):  #### génère un élément aléatoire
         """Returns a clone of random element from a collection using exponential random law."""
@@ -1555,7 +1625,9 @@ class Game(object):
     def randEquipment(self):  #### génère un équipement aléatore
 
         return self.randElement(Game.equipments)
+    def randShopItem(self):  #### génère un équipement non prenable aléatore
 
+        return self.randElement(Game.shopInv)
     def randMonster(self):  #### génère un mob aléatoire
             
         return self.randElement(Game.monsters)
@@ -1903,12 +1975,12 @@ class Game(object):
                 for i in range (len(self.floor._mat)):
                     for j in range (len(self.floor._mat[i])):
                         item=self.floor._mat[i][j]
-                        if isinstance(item, Equipment):
+                        if isinstance(item, Equipment) and item.nonShop:
                             a=self.floor.pos(item)
                             self.floor.rm(self.floor.pos(item))
                             self.floor.put(a,self.randMonster())
                 self.addEffect('All Equipments on the ground have been transformed into monsters !')
-    
+
     def hoopaSpawn(self):
         if self.hero.otherDim:
             if 'Hoopa' in str(self.floor):
@@ -1960,7 +2032,7 @@ class Game(object):
                 
                 self.spawn()
                 self.hoopaSpawn() 
-                            
+                
                 canvasInventaire.delete('all')
                 canvas.delete('all')
                 self.drawTout()
@@ -2098,7 +2170,9 @@ textures = {
         'Akaza' : ImageTk.PhotoImage(Image.open(r"images jeu\akaza.png")),
         'Spider' : ImageTk.PhotoImage(Image.open(r"images jeu\spider.png").resize((50,50))),
         'Slender' : ImageTk.PhotoImage(Image.open(r"images jeu\slender.png").resize((55,55))),
-        'Hoopa' : ImageTk.PhotoImage(Image.open(r"images jeu\hoopa.png"))
+        'Hoopa' : ImageTk.PhotoImage(Image.open(r"images jeu\hoopa.png")),
+        'Merchant' : ImageTk.PhotoImage(Image.open(r"images jeu\Merchant.jpg"))
+
         
     },
     'items': {
@@ -2201,6 +2275,7 @@ textures = {
         'summer' : ImageTk.PhotoImage(Image.open(r"images jeu\summer.png")),
         'fall' : ImageTk.PhotoImage(Image.open(r"images jeu\fall.png")),
         'winter' : ImageTk.PhotoImage(Image.open(r"images jeu\winter.png")),
+        'winter2' : ImageTk.PhotoImage(Image.open(r"images jeu\winter2.png")),
 
     }
 }
